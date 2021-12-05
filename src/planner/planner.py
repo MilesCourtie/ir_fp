@@ -2,9 +2,10 @@
 
 import math
 import rospy
+from tf.transformations import euler_from_quaternion
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import LaserScan, PointCloud2
-from geometry_msgs.msg import Twist
+from geometry_msgs.msg import Pose, Twist
 from laser_geometry.laser_geometry import LaserProjection
 
 
@@ -32,73 +33,175 @@ class Planner:
 
         self.scan = None
         self.point_cloud = None
-        self.pose = None
-        self.twist = None
+        self.x = 0
+        self.y = 0
+        self.theta = 0
         self.rate = rospy.Rate(10)
 
         self.PIXEL_TO_METER = 2
         self.DISTANCE_TOLERANCE = 0.1
+        self.ROTATION_TOLERANCE = 0.1
+        self.LINEAR_VEL = 1
+        self.ANGULAR_VEL = math.radians(30)
 
     def update_pose(self, data):
-        self.pose = data.pose.pose
-        self.twist = data.twist.twist
+        self.x = data.pose.pose.position.x
+        self.y = data.pose.pose.position.y
+
+        quaternion = data.pose.pose.orientation
+        (_, _, self.theta) = euler_from_quaternion(
+            [quaternion.x, quaternion.y, quaternion.z, quaternion.w]
+        )
 
     def update_scan(self, data):
         self.scan = data
         self.point_cloud = self.projector.projectLaser(data)
 
-    def euclidean_distance(self, x, y):
-        return math.sqrt(
-            pow((x - self.pose.position.x), 2) + pow((y - self.pose.position.y), 2)
-        )
-
     def is_blocked_in_right(self, distance):
+        self.rate.sleep()
+
         for i in range(166):
-            if self.scan.ranges[i] < distance / self.PIXEL_TO_METER:
+            if self.scan.ranges[i] < distance:
                 return True
+
         return False
 
     def is_blocked_in_front(self, distance):
+        self.rate.sleep()
+
         for i in range(166, 334):
-            if self.scan.ranges[i] < distance / self.PIXEL_TO_METER:
+            if self.scan.ranges[i] < distance:
                 return True
+
         return False
 
     def is_blocked_in_left(self, distance):
+        self.rate.sleep()
+
         for i in range(334, len(self.scan.ranges)):
-            if self.scan.ranges[i] < distance / self.PIXEL_TO_METER:
+            if self.scan.ranges[i] < distance:
                 return True
+
         return False
 
+    def euclidean_distance(self, x, y):
+        return math.sqrt(pow((x - self.x), 2) + pow((y - self.y), 2))
+
+    def steering_angle(self, x, y):
+        return math.atan2(y - self.y, x - self.x)
+
+    def stop_robot(self):
+        vel_msg = Twist()
+        vel_msg.linear.x = 0
+        vel_msg.angular.z = 0
+        self.velocity_publisher.publish(vel_msg)
+
     def drive_forward(self, distance):
-        pass
+        self.rate.sleep()
+
+        x = self.x
+        y = self.y
+
+        vel_msg = Twist()
+
+        while distance > self.DISTANCE_TOLERANCE:
+            vel_msg.linear.x = self.LINEAR_VEL
+
+            self.velocity_publisher.publish(vel_msg)
+
+            walked_distance = self.euclidean_distance(x, y)
+
+            x = self.x
+            y = self.y
+            distance -= walked_distance
+            self.rate.sleep()
+
+        self.stop_robot()
+
+    def rotate(self, angle, direction):
+        self.rate.sleep()
+
+        if direction == "l":
+            rotation_direction = 1
+        elif direction == "r":
+            rotation_direction = -1
+
+        vel_msg = Twist()
+
+        if angle > 180:
+            angle = angle - 360
+
+        angle = (rotation_direction * math.radians(angle)) + self.theta
+
+        while abs(angle - self.theta) > self.ROTATION_TOLERANCE:
+            vel_msg.angular.z = self.ANGULAR_VEL * rotation_direction
+            self.velocity_publisher.publish(vel_msg)
+            self.rate.sleep()
+
+        self.stop_robot()
 
     def turn_left(self, angle):
-        pass
+        self.rotate(angle, "l")
 
     def turn_right(self, angle):
-        pass
+        self.rotate(angle, "r")
 
     def drive_until_blocked(self, distance):
-        pass
+        self.rate.sleep()
+
+        vel_msg = Twist()
+
+        while not self.is_blocked_in_front(distance):
+            vel_msg.linear.x = 1
+            self.velocity_publisher.publish(vel_msg)
+            self.rate.sleep()
+
+        vel_msg.linear.x = 0
+        vel_msg.linear.y = 0
+        vel_msg.linear.z = 0
+        self.velocity_publisher.publish(vel_msg)
 
     def go_to_pose(self, x, y, heading):
-        pass
+        self.rate.sleep()
+
+        vel_msg = Twist()
+
+        if heading > 180:
+            heading = heading - 360
+
+        heading = math.radians(heading)
+
+        while self.euclidean_distance(x, y) > self.DISTANCE_TOLERANCE:
+            steering_angle = self.steering_angle(x, y)
+
+            if abs(steering_angle - self.theta) > self.ROTATION_TOLERANCE:
+                vel_msg.linear.x = 0
+                vel_msg.angular.z = self.ANGULAR_VEL
+            else:
+                vel_msg.linear.x = self.LINEAR_VEL
+                vel_msg.angular.z = 0
+
+            self.velocity_publisher.publish(vel_msg)
+            self.rate.sleep()
+
+        while abs(heading - self.theta) > self.ROTATION_TOLERANCE:
+            vel_msg.linear.x = 0
+            vel_msg.angular.z = self.ANGULAR_VEL
+            self.velocity_publisher.publish(vel_msg)
+            self.rate.sleep()
+
+        self.stop_robot()
 
 
 if __name__ == "__main__":
     try:
         planner = Planner()
-        rospy.sleep(1)
 
         while not rospy.is_shutdown():
-            print(
-                "---------------------------------DATA FROM LASER---------------------------------"
-            )
-            print("Left: " + str(planner.is_blocked_in_left(1)))
-            print("Front: " + str(planner.is_blocked_in_front(1)))
-            print("Right: " + str(planner.is_blocked_in_right(1)))
-            planner.rate.sleep()
+            planner.turn_left(45)
+            # planner.go_to_pose(0, 0, 360)
+            break
+
         rospy.spin()
     except rospy.ROSInterruptException:
         pass
