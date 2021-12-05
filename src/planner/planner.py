@@ -51,13 +51,55 @@ class Planner:
         pass
 
     def drive_forward(self, distance):
-        pass
+        vel_msg = Twist()
+            
+        vel_msg.linear.x = 1
+        vel_msg.linear.y = 0
+        vel_msg.linear.z = 0
+        
+        vel_msg.angular.x = 0
+        vel_msg.angular.y = 0
+        vel_msg.angular.z = 0
+            
+        while(distance > 0):
+	    self.velocity_publisher.publish(vel_msg)
+	    distance -= 1
+	    
+	vel_msg.linear.x = 0
 
     def turn_left(self, angle):
-        pass
-
+        vel_msg = Twist()
+            
+        vel_msg.linear.x = 0
+        vel_msg.linear.y = 0
+        vel_msg.linear.z = 0
+        
+        vel_msg.angular.x = -1
+        vel_msg.angular.y = 0
+        vel_msg.angular.z = 0
+            
+        while(angle > 0):
+	    self.velocity_publisher.publish(vel_msg)
+	    angle -= 1
+	    
+	vel_msg.angular.x = 0
+        
     def turn_right(self, angle):
-        pass
+        vel_msg = Twist()
+            
+        vel_msg.linear.x = 0
+        vel_msg.linear.y = 0
+        vel_msg.linear.z = 0
+        
+        vel_msg.angular.x = 1
+        vel_msg.angular.y = 0
+        vel_msg.angular.z = 0
+            
+        while(angle > 0):
+	    self.velocity_publisher.publish(vel_msg)
+	    angle -= 1
+	    
+	vel_msg.angular.x = 0
 
     def drive_until_blocked(self, distance):
         pass
