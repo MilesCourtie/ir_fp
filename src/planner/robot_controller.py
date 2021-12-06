@@ -4,23 +4,19 @@ import math
 import rospy
 from tf.transformations import euler_from_quaternion
 from nav_msgs.msg import Odometry
-from sensor_msgs.msg import LaserScan, PointCloud2
-from geometry_msgs.msg import Pose, Twist
+from sensor_msgs.msg import LaserScan
+from geometry_msgs.msg import Twist
 from laser_geometry.laser_geometry import LaserProjection
 
 
-class Planner:
+class RobotController:
     def __init__(self):
         # Creates a node with name 'Planner' and make sure it is a
         # unique node (using anonymous=True).
-        rospy.init_node("planner", anonymous=True)
+        rospy.init_node("robot_controller", anonymous=True)
 
         # Publisher which will publish to the topic '/cmd_vel'.
         self.velocity_publisher = rospy.Publisher("/cmd_vel", Twist, queue_size=10)
-
-        self.point_cloud_publisher = rospy.Publisher(
-            "/point_cloud", PointCloud2, queue_size=10
-        )
 
         # A subscriber to the topic '/odom'. self.update_pose is called
         # when a message of type Pose is received.
@@ -191,17 +187,3 @@ class Planner:
             self.rate.sleep()
 
         self.stop_robot()
-
-
-if __name__ == "__main__":
-    try:
-        planner = Planner()
-
-        while not rospy.is_shutdown():
-            planner.turn_left(45)
-            # planner.go_to_pose(0, 0, 360)
-            break
-
-        rospy.spin()
-    except rospy.ROSInterruptException:
-        pass
