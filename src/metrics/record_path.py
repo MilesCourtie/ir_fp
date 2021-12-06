@@ -5,16 +5,11 @@
     description: 
 
     usage: rosrun ir_fp record_path.py
-
-    NOTE: This program assumes that the orientations of the received poses
-    have x- and y-components of 0 (i.e. the robot is parallel to the floor).
-    Assuming this, the heading of the robot can be calculated from just the
-    w-component.
 """
 
 #==================== imports ====================#
 
-import rospy
+import rospy, tf
 import datetime
 from geometry_msgs.msg import Pose, Point, Quaternion
 from nav_msgs.msg import Odometry
@@ -37,7 +32,7 @@ empty = True   # tracks whether initial pose has been stored
 
 prev_pos_x = 0 # most recent x position
 prev_pos_y = 0 # most recent y position
-prev_rot_w = 0 # most recent w component of orientation
+prev_yaw   = 0 # most recent yaw
 
 record_num = 0 # record index within current batch
 
@@ -65,7 +60,7 @@ def handle_base_pose(data):
     global empty
     global prev_pos_x
     global prev_pos_y
-    global prev_rot_w
+    global prev_yaw
     global record_num
     global records
     global record_buf
@@ -73,21 +68,27 @@ def handle_base_pose(data):
     if not enabled:
         return
 
-    pos_x = data.pose.pose.position.x
-    pos_y = data.pose.pose.position.y
-    rot_w = data.pose.pose.orientation.w
+    pose = data.pose.pose
+    pos_x = pose.position.x
+    pos_y = pose.position.y
+    yaw = tf.transformations.euler_from_quaternion([
+            pose.orientation.x,
+            pose.orientation.y,
+            pose.orientation.z,
+            pose.orientation.w
+            ])[2]
 
     if empty \
             or pos_x != prev_pos_x \
             or pos_y != prev_pos_y \
-            or rot_w != prev_rot_w:
+            or yaw != prev_yaw:
         prev_pos_x = pos_x
         prev_pos_y = pos_y
-        prev_rot_w = rot_w
+        prev_yaw = yaw
         empty = False
 
         # save record to buffer
-        record = f"{pos_x},{pos_y},{rot_w}"
+        record = f"{pos_x},{pos_y},{yaw}"
         print("record " + str(record_num) + ": " + record)
         records[record_buf][record_num] = record + "\n"
         record_num = record_num + 1
