@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<!--
+	ir_fp/scripts/coverage_stats.html
+
+	description:
+		tool to calculate statistics such as coverage, distance travelled, etc.
+		given a PNG map and a sequence of poses.
+	
+	usage:
+		Open in a web browser, upload a map image and path file, then press Go.
+
+	author:
+		Miles Courtie (Group 29, Intelligent Robotics 2021)
+-->
+<html>
+    <head>
+        <meta charset='utf-8'/>
+        <style>
+:root {
+	--page-bg:  #ffffff;
+	--text-fg:  #000000;
+}
+
+body {
+    background-color: var(--page-bg);
+}
+
+#container_main {
+    text-align: center;
+}
+
+.file_upload, label {
+	color: var(--text-fg);
+}
+
+#container_controls {
+	display: inline-block;
+	text-align: right;
+}
+
+#canvas {
+	display: inline-block;
+}
+
+#container_output {
+}
+        </style>
+    </head>
+	<body>
+		<div id="container_main">
+			<div id="container_controls">
+				<label for="file_map">Map: </label>
+				<input type="file" id="file_map", class="file_upload" accept=".png"></input><br/>
+				<label for="file_path">Path: </label>
+				<input type="file" id="file_path", class="file_upload" accept=".csv"></input><br/>
+				<input type="button" id="btn_go" value="Go"></input>
+			</div>
+			<canvas id="canvas"></canvas>
+			<div id="container_output">
+			</div>
+		</div>
+		<script>
+
+
+
+/*======================================== constants ========================================*/
+
+/* GUI elements */
+const GUI = {
+	file_map: undefined,
+	file_path: undefined,
+	btn_go: undefined,
+	canvas: undefined,
+	brush: undefined,
+}
+
+/* error messages */
+const MSG_MAP_LOAD_FAILED = "MSG_MAP_LOAD_FAILED";
+const MSG_PATH_LOAD_FAILED = "MSG_PATH_LOAD_FAILED";
+
+/* metres to pixels conversion */
+const M_TO_PX = 50; // metres to pixels conversion
+
+/* robot diamater in pixels */
+const ROBOT_DIAM_PX = 25;
+const ROBOT_RADIUS_PX = ROBOT_DIAM_PX / 2;
+
+
+
+/*======================================== globals ========================================*/
+
+/* the loaded image of the map */
+var g_map;
+
+/* the path, loaded as a sequence of (x,y,yaw) poses */
+var g_path;
+
+
+
+/*======================================== utilities ========================================*/
+
+/* convert radians to degrees */
+function radsToDegs(rads) {
+	return (rads / Math.PI) * 180;
+}
+
+/* restrict an angle in degrees to a fixed number of decimal places,
+ * used as much as possible to avoid floating-point errors
+ */
+function anglePrecision(degs) {
+	return parseFloat(degs.toFixed(4));
+}
+
+/* transform an angle in degrees to be within the range [0, 360) */
+function restrictAngle(degs) {
+	while (degs < 0) degs += 360;
+	while (degs >= 360) degs -= 360;
+	return degs;
+}
+
+/* the shortest distance between two angles in degrees,
+ * which must both be within [0, 360) */
+function shortestDistDegs(a, b) {
+	var diff = Math.abs(a - b);
+	return diff > 180 ? 360 - diff : diff;
+}
+
+/* given two angles A and B in degrees
+ *   returns -1 if travelling clockwise from A to B is fastest
+ *   returns  1 if travelling anticlockwise from A to B is fastest
+ *   returns  0 if A and B are equal
+ * A and B must be within [0, 360)
+ */
+function turnDirDegs(a, b) {
+	if (a > b)      return a - b < 180 ? 1 : -1;
+	else if (a < b)	return b - a > 180 ? 1 : -1;
+	else            return 0;
+}
+
+/* remove from a string the final dot ('.') and any characters after it */
+function splitFileName(fileName) {
+	var dotIndex = fileName.lastIndexOf(".");
+	if (dotIndex == -1) return filename;
+	else return fileName.slice(0, dotIndex);
+}
+
+/* asynchronously load an image from a given file */
+function loadImage(file) {
+	return new Promise((resolve, reject) => {
+		let reader = new FileReader();
+		reader.onload = (e) => {
+			let img = new Image();
+			img.onload = () => { resolve(img); }
+			img.onerror = reject;
+			img.src = e.target.result;
+		}
+		reader.onerror = reject;
+		reader.readAsDataURL(file)
+	});
+}
+
+/* asynchronously load a robot path from a given CSV file */
+function loadPath(file) {
+	return new Promise((resolve, reject) => {
+		let reader = new FileReader();
+		reader.onload = (e) => {
+			let lines = e.target.result.split('\n').slice(0,-1);
+			let path;
+			try {
+				path = lines
+					.map((x) => x.split(','))
+					.map((arr) => {
+						return {
+							x : parseFloat(arr[0]),
+							y : parseFloat(arr[1]),
+							yaw : anglePrecision(restrictAngle(
+									radsToDegs(parseFloat(arr[2]))
+							))
+						}
+					});
+			} catch { reject(); }
+			resolve(path);
+		}
+		reader.onerror = reject;
+		reader.readAsText(file);
+	});
+}
+
+/* transform an XY pair from world coordinates to image coordinates */
+function transformPose(pose) {
+	return {
+		x: g_map.width / 2 + pose.x * M_TO_PX,
+		y: g_map.height / 2 - pose.y * M_TO_PX,
+	}
+}
+
+
+
+/* ======================================== main functions ========================================*/
+
+/* return a copy of a given path where only the final pose of each movement is stored
+ * (a movement is one of: idle, move forward, move backward, turn left, turn right)
+ */
+function compressPath(path) {
+	const IDLE='IDLE', MOV_F='MOV_F', MOV_B='MOV_B', MOV_L='MOV_L', MOV_R='MOV_R';
+
+	var output;
+	var prev, prevMvmt;
+	var curr, currMvmt;
+
+	output = [];
+	prev = path[0];
+	prevMvmt = IDLE;
+
+	for (let i = 1; i < path.length; i++) {
+		curr = path[i];
+
+		if (curr.x != prev.x || curr.y != prev.y) {
+			let mvmt = {
+				x: curr.x - prev.x,
+				y: curr.y - prev.y
+			};
+			mvmt.yaw = anglePrecision(radsToDegs(Math.atan2(mvmt.y, mvmt.x)));
+			if (shortestDistDegs(mvmt.yaw, prev.yaw) < 90) {
+				currMvmt = MOV_F;
+			} else {
+				currMvmt = MOV_B;
+			}
+		} else {
+			// assert(curr.yaw != prev.yaw);
+			let turnDir = turnDirDegs(prev.yaw, curr.yaw);
+			if (turnDir == -1)     currMvmt = MOV_L;
+			else if (turnDir == 1) currMvmt = MOV_R;
+			else {
+				currMvmt = IDLE;
+				console.log("Warning: idle movement at index " + i.toString());
+			}
+		}
+
+		if (currMvmt != prevMvmt) {
+			output.push(prev);
+		}
+
+		prev = curr;
+		prevMvmt = currMvmt;
+	}
+	output.push(prev);
+
+	return output;
+}
+
+/* draws g_map onto the canvas and plots the coverage of 'path' on it */
+function drawCoverage(path) {
+
+	// draw the map on the canvas
+	GUI.canvas.width = g_map.width;
+	GUI.canvas.height = g_map.height;
+	GUI.brush.drawImage(g_map, 0, 0);
+
+	// setup
+	GUI.brush.lineWidth = ROBOT_DIAM_PX;
+	const DRAW_STYLE = "rgb(64,64,0)"; // inverse of desired path colour
+
+	// function to switch between 'adding' and 'subtracting' colours to the canvas
+	let toggleSubtract = () => {
+		GUI.brush.globalCompositeOperation = "difference";
+		GUI.brush.fillStyle = "rgb(255,255,255)";
+		GUI.brush.fillRect(0, 0, g_map.width, g_map.height);
+		GUI.brush.globalCompositeOperation = "lighter";
+		GUI.brush.fillStyle = DRAW_STYLE;
+		GUI.brush.strokeStyle = DRAW_STYLE;
+	}
+
+	var prev = transformPose(path[0]) // first pose
+
+	toggleSubtract(); // adding
+	GUI.brush.beginPath();
+	GUI.brush.ellipse(prev.x, prev.y, ROBOT_RADIUS_PX, ROBOT_RADIUS_PX, 0, 0, Math.PI * 2);
+	GUI.brush.fill();
+	toggleSubtract(); // subtracting
+
+	for (let i = 1; i < path.length; i++) { // starts at second pose
+		let curr = transformPose(path[i]); // current pose
+
+		// skip if no displacement
+		if (curr.x == prev.x && curr.y == prev.y) {
+			prev = curr; // update 'prev'
+			continue;
+		}
+
+		// calculate parameters of ellipses for later
+		let angleRads = Math.atan2(curr.y - prev.y, curr.x - prev.x)
+		let startAngle = angleRads - Math.PI / 2;
+		let endAngle = angleRads + Math.PI / 2;
+
+		toggleSubtract(); // adding
+
+		// draw thick line from previous pose to current pose
+		GUI.brush.beginPath();
+		GUI.brush.moveTo(prev.x, prev.y);
+		GUI.brush.lineTo(curr.x, curr.y);
+		GUI.brush.stroke();
+
+		// add semicircle at the end of the line
+		GUI.brush.beginPath();
+		GUI.brush.ellipse(
+			curr.x, curr.y, // centre
+			ROBOT_RADIUS_PX, ROBOT_RADIUS_PX, 0, // radii and rotation
+			startAngle, endAngle // start/finish angles
+		);
+		GUI.brush.fill();
+
+		toggleSubtract(); // subtracting
+
+		// subtract semicircle from the start of the line
+		GUI.brush.beginPath();
+		GUI.brush.ellipse(
+			prev.x, prev.y, // centre
+			ROBOT_RADIUS_PX, ROBOT_RADIUS_PX, 0, // radii and rotation
+			startAngle, endAngle // start/finish angles
+		);
+		GUI.brush.fill()
+
+		prev = curr; // update 'prev'
+	}
+}
+
+/* Handler for when the 'go' button is pressed.
+ * Contains the main logic for the program.
+ */
+async function handler_btn_go() {
+
+	/* load map image from file into g_map */
+	var mapFile, mapImage;
+	if (GUI.file_map.files.length == 0) return;     // if no map file selected, return
+	mapFile = GUI.file_map.files[0];                // get selected file
+	g_mapName = splitFileName(mapFile.name).name;   // read file name
+	try {
+		g_map = await loadImage(mapFile);           // try to load image
+	} catch {
+		alert(MSG_MAP_LOAD_FAILED);                 // if error loading image:
+		return;                                     //   alert user and return
+	}
+
+	/* load path from file into g_path.original */
+	var pathFile;
+	g_path = {};
+	if (GUI.file_path.files.length == 0) return;    // if no path file selected, return
+	pathFile = GUI.file_path.files[0];              // get selected file
+	g_pathName = splitFileName(pathFile.name).name; // read file name
+	try {
+		g_path.original = await loadPath(pathFile); // try to load path
+	} catch {
+		alert(MSG_PATH_LOAD_FAILED);                // if error loading path:
+		return;                                     //   alert user and return
+	}
+
+	/* remove intermediate poses from path */
+	g_path.compressed = compressPath(g_path.original);
+
+	/* draw path on canvas */
+	drawCoverage(g_path.compressed);
+}
+
+/* get GUI elements once document is loaded */
+window.onload = () => {
+	GUI.file_map = document.getElementById("file_map");
+	GUI.file_path = document.getElementById("file_path");
+	GUI.btn_go = document.getElementById("btn_go");
+	GUI.canvas = document.getElementById("canvas");
+	GUI.brush = GUI.canvas.getContext("2d");
+
+	GUI.btn_go.onclick = handler_btn_go;
+}
+
+
+		</script>
+	</body>
+</html>
