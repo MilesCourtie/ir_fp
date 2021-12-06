@@ -49,6 +49,12 @@ class RobotController:
             [quaternion.x, quaternion.y, quaternion.z, quaternion.w]
         )
 
+    def getX(self):
+        return self.x
+        
+    def getY(self):
+        return self.y
+        
     def update_scan(self, data):
         self.scan = data
         self.point_cloud = self.projector.projectLaser(data)
