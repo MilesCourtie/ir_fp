@@ -29,7 +29,7 @@ body {
     text-align: center;
 }
 
-.file_upload, label {
+.file_upload, label, p {
 	color: var(--text-fg);
 }
 
@@ -57,6 +57,7 @@ body {
 			</div>
 			<canvas id="canvas"></canvas>
 			<div id="container_output">
+				<p id="p_output"></p>
 			</div>
 		</div>
 		<script>
@@ -84,6 +85,14 @@ const M_TO_PX = 50; // metres to pixels conversion
 /* robot diamater in pixels */
 const ROBOT_DIAM_PX = 25;
 const ROBOT_RADIUS_PX = ROBOT_DIAM_PX / 2;
+
+/* distance between robot's wheels in metres */
+const WHEEL_SEPARATION_M = 0.5;
+
+/* opacity of drawn coverage, integer range [0,255], 0 is transparent.
+ * Lower values allow for more layers of overlap.
+ */
+const COVERAGE_OPACITY = 64;
 
 
 
@@ -194,6 +203,30 @@ function transformPose(pose) {
 	}
 }
 
+/* rounds all pixel values of the drawn coverage to the nearest COVERAGE_OPACITY */
+function quantiseCoverage() {
+	// assumes coverage is drawn in blue
+	var imageData = GUI.brush.getImageData(0, 0, g_map.width, g_map.height);
+	for (let pixel = 0; pixel < imageData.data.length; pixel += 4) {
+		let r = imageData.data[pixel + 0];
+		let g = imageData.data[pixel + 1];
+		//let b = imageData.data[pixel + 2];
+		//let a = imageData.data[pixel + 3];
+		
+		let remainder = (r+1) % COVERAGE_OPACITY;
+		if (remainder > 0) {
+			if (remainder > COVERAGE_OPACITY / 2) {
+				r += COVERAGE_OPACITY;
+			}
+			r -= remainder;
+		}
+		g = r;
+		imageData.data[pixel + 0] = r;
+		imageData.data[pixel + 1] = g;
+	}
+	GUI.brush.putImageData(imageData, 0, 0);
+}
+
 
 
 /* ======================================== main functions ========================================*/
@@ -251,15 +284,18 @@ function compressPath(path) {
 
 /* draws g_map onto the canvas and plots the coverage of 'path' on it */
 function drawCoverage(path) {
+	const DRAW_STYLE = "rgb("
+		+ COVERAGE_OPACITY + ","
+		+ COVERAGE_OPACITY + ",0)";
 
 	// draw the map on the canvas
 	GUI.canvas.width = g_map.width;
 	GUI.canvas.height = g_map.height;
 	GUI.brush.drawImage(g_map, 0, 0);
 
-	// setup
+	// drawing setup
+	GUI.brush.strokeStyle = DRAW_STYLE;
 	GUI.brush.lineWidth = ROBOT_DIAM_PX;
-	const DRAW_STYLE = "rgb(64,64,0)"; // inverse of desired path colour
 
 	// function to switch between 'adding' and 'subtracting' colours to the canvas
 	let toggleSubtract = () => {
@@ -268,7 +304,6 @@ function drawCoverage(path) {
 		GUI.brush.fillRect(0, 0, g_map.width, g_map.height);
 		GUI.brush.globalCompositeOperation = "lighter";
 		GUI.brush.fillStyle = DRAW_STYLE;
-		GUI.brush.strokeStyle = DRAW_STYLE;
 	}
 
 	var prev = transformPose(path[0]) // first pose
@@ -325,6 +360,121 @@ function drawCoverage(path) {
 	}
 }
 
+/* computes statistics of a path using:
+ *  - the full path (array of poses)
+ *  - the compressed path (full path minus 'intermediate' poses)
+ *  - the coverage map (array of pixel values)
+ * returns a multiline string containing computed statistics.
+ */
+function computeStats(fullPath, compPath, coverageMapData) {
+	var coverageMap = coverageMapData.data;
+
+	var outputText = "";
+	
+	var straightLineDistance;
+	{
+		const DECIMAL_PLACES = 3;
+		straightLineDistance = 0;
+		let prev = compPath[0];
+		for (let i = 1; i < compPath.length; i++) {
+			let curr = compPath[i];
+			straightLineDistance += Math.sqrt(
+				Math.pow(curr.x - prev.x, 2) +
+				Math.pow(curr.y - prev.y, 2)
+			);
+			prev = curr;
+		}
+		outputText += "straight-line distance: ";
+		outputText += straightLineDistance.toFixed(DECIMAL_PLACES);
+		outputText += "m\n"; // metres
+	}
+
+	var angleTurned;
+	{
+		const DECIMAL_PLACES = 3;
+		angleTurned = 0;
+		let prev = fullPath[0];
+		for (let i = 1; i < fullPath.length; i++) {
+			let curr = fullPath[i];
+			angleTurned += shortestDistDegs(prev.yaw, curr.yaw);
+			prev = curr;
+		}
+		outputText += "angle turned: ";
+		outputText += angleTurned.toFixed(DECIMAL_PLACES);
+		outputText += " degrees\n";
+	}
+
+	var distanceTurned;
+	{
+		const DECIMAL_PLACES = 3;
+		distanceTurned =
+			(angleTurned * Math.PI / 180)
+			* (WHEEL_SEPARATION_M / 2);
+		outputText += "distance turned: ";
+		outputText += distanceTurned.toFixed(DECIMAL_PLACES);
+		outputText += "m\n"; // metres
+	}
+
+	var totalDistance;
+	{
+		const DECIMAL_PLACES = 3;
+		totalDistance = straightLineDistance + distanceTurned;
+		outputText += "total distance: ";
+		outputText += totalDistance.toFixed(DECIMAL_PLACES);
+		outputText += "m\n"; // metres
+	}
+
+	var numberOfTurns;
+	{
+		numberOfTurns = 0;
+		let prev = compPath[0];
+		for (let i = 1; i < compPath.length; i++) {
+			let curr = compPath[i];
+			if (curr.yaw != prev.yaw) numberOfTurns += 1;
+			prev = curr;
+		}
+		outputText += "number of turns: ";
+		outputText += numberOfTurns.toString();
+		outputText += "\n";
+	}
+
+	var coverage, repeatCoverage;
+	{
+		const DECIMAL_PLACES = 3;
+		let mapArea = 0;
+		coverage = 0;
+		repeatCoverage = 0;
+		for (let pixel = 0; pixel < coverageMap.length; pixel += 4) {
+			let r = coverageMap[pixel + 0];
+			let g = coverageMap[pixel + 1];
+			let b = coverageMap[pixel + 2];
+
+			// black pixels can be skipped
+			if (r == 0 && g == 0 && b == 0) continue;
+
+			// pixel is not black, therefore is part of total area
+			mapArea += 1;
+
+			// determine number of times pixel was covered
+			let timesCovered = (255 - r) / COVERAGE_OPACITY;
+			if (timesCovered > 0) {
+				coverage += 1;
+				repeatCoverage += timesCovered - 1;
+			}
+		}
+		repeatCoverage = 100 * repeatCoverage / coverage;
+		coverage = 100 * coverage / mapArea;
+		outputText += "coverage: ";
+		outputText += coverage.toFixed(DECIMAL_PLACES);
+		outputText += "%\n";
+		outputText += "repeat coverage: ";
+		outputText += repeatCoverage.toFixed(DECIMAL_PLACES);
+		outputText += "%\n";
+	}
+
+	return outputText;
+}
+
 /* Handler for when the 'go' button is pressed.
  * Contains the main logic for the program.
  */
@@ -358,8 +508,17 @@ async function handler_btn_go() {
 	/* remove intermediate poses from path */
 	g_path.compressed = compressPath(g_path.original);
 
-	/* draw path on canvas */
+	/* draw coverage on canvas */
 	drawCoverage(g_path.compressed);
+	quantiseCoverage();
+
+	/* calculate statistics and display */
+	var statistics = computeStats(
+		g_path.original,
+		g_path.compressed,
+		GUI.brush.getImageData(0, 0, g_map.width, g_map.height)
+	);
+	GUI.p_output.innerHTML = statistics.replaceAll("\n","<br/>");
 }
 
 /* get GUI elements once document is loaded */
@@ -369,9 +528,11 @@ window.onload = () => {
 	GUI.btn_go = document.getElementById("btn_go");
 	GUI.canvas = document.getElementById("canvas");
 	GUI.brush = GUI.canvas.getContext("2d");
+	GUI.p_output = document.getElementById("p_output");
 
 	GUI.btn_go.onclick = handler_btn_go;
 }
+
 
 
 		</script>
