@@ -1,48 +1,50 @@
-#!/usr/bin/env python3.8
-from planner.robot_controller import RobotController
+#!/usr/bin/env python3
+
+from robot_controller import RobotController
 import rospy
 import random
 
 
 class Zigzag:
-    def __init__(self):
-        rospy.init_node("zigzag", anonymous=True)
-
+    def __init__(self, robot_width):
         # use this object to control the robot
         self.robot_controller = RobotController()
-	
+        self.robot_width = robot_width
+
         # Write any other attributes here
 
     def traverse(self):
-        #Dont know what the width should be
-        robotWidth = 10
-        while(true):
+        # Dont know what the width should be
+        while True:
             done = True
-            #No clue what scale we are looking at
-            robot_controller.drive_until_blocked(500)
-            robot_controller.turn_right(90)
-            if robot_controller.is_blocked_in_front(10) == False:
+            # No clue what scale we are looking at
+            self.robot_controller.drive_until_blocked()
+            self.robot_controller.turn_right(90)
+
+            if not self.robot_controller.is_blocked_in_front():
                 done = False
-                robot_controller.drive_forward(robotWidth)
-            robot_controller.turn_right(90)
-            robot_controller.drive_until_blocked(500)
-            robot_controller.turn_left(90)
-            if robot_controller.is_blocked_in_front(10) == False:
+                self.robot_controller.drive_forward(self.robot_width)
+
+            self.robot_controller.turn_right(90)
+            self.robot_controller.drive_until_blocked()
+            self.robot_controller.turn_left(90)
+
+            if not self.robot_controller.is_blocked_in_front():
                 done = False
-                robot_controller.drive_forward(robotWidth)
-            robot_controller.turn_left(90)
-            if done == True:
-            	robot_controller.stop_robot()
-            	break
-	    
-	    
+                self.robot_controller.drive_forward(self.robot_width)
+                self.robot_controller.turn_left(90)
+
+            if done:
+                self.robot_controller.stop_robot()
+                break
+
+
 if __name__ == "__main__":
     try:
-        zigzag = Zigzag()
-        
+        zigzag = Zigzag(0.35)
+
         while not rospy.is_shutdown():
             zigzag.traverse()
-            break
 
         rospy.spin()
     except rospy.ROSInterruptException:
