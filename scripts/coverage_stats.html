@@ -262,8 +262,8 @@ function compressPath(path) {
 		} else {
 			// assert(curr.yaw != prev.yaw);
 			let turnDir = turnDirDegs(prev.yaw, curr.yaw);
-			if (turnDir == -1)     currMvmt = MOV_L;
-			else if (turnDir == 1) currMvmt = MOV_R;
+			if (turnDir == -1)     currMvmt = MOV_R;
+			else if (turnDir == 1) currMvmt = MOV_L;
 			else {
 				currMvmt = IDLE;
 				console.log("Warning: idle movement at index " + i.toString());
