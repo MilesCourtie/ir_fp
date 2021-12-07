@@ -1,2 +1,5 @@
 *.pyc
+<<<<<<< HEAD
 src.planner/__pycache__
+=======
+>>>>>>> main
