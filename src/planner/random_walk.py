@@ -18,7 +18,7 @@ class RandomWalk:
         while True:
             print("Driving")
             self.robot_controller.drive_until_blocked()
-            print("Turing")
+            print("Turning")
             random_angle = random.randint(10, 180)
             self.robot_controller.turn_left(random_angle)
 
