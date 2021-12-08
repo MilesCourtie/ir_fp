@@ -71,14 +71,22 @@ def check_forward_cell():
 
 def backtrack(stack):
 
+    global direction
     # flip robot
     robot_controller.turn_right(180)
+    direction = direction.right()
+    direction = direction.right()
 
     while len(stack) != 0:
         last_movement = stack.pop()
-
+        
+        print("--------------------")
+        print("BACKTRACKING")
+        print("set: currx:{},curry:{}".format(pos_x,pos_y))
+        print(direction)
         if last_movement == 0:
             robot_controller.drive_forward(0.5)
+            update_pos(direction)
         elif last_movement == 1:
             robot_controller.turn_left(90)
             direction = direction.left()
@@ -87,22 +95,39 @@ def backtrack(stack):
             direction = direction.right()
             
             
-        if (check_right_cell == False):
-            robot_contoller.turn_right(90)
+        if (not robot_controller.is_blocked_right()) and  (not check_right_cell()):
+            robot_controller.turn_right(90)
             direction=direction.right()
             robot_controller.drive_forward(0.5)
+            update_pos(direction)
             bsa()
-        elif (check_forward_cell == False):
+        elif (not robot_controller.is_blocked_front()) and (not check_forward_cell()):
             robot_controller.drive_forward(0.5)
+            update_pos(direction)
             bsa()
-        elif (check_left_cell == False):
+        elif (not robot_controller.is_blocked_left()) and (not check_left_cell()):
             robot_contoller.turn_left(90)
             direction = direction.left()
             robot_controller.drive_forward(0.5)
+            update_pos(direction)
             bsa()
-            
+          
     print("We're done for good")
 
+def update_pos(direction):
+
+    global pos_x, pos_y
+
+    if direction == Direction.east:
+        pos_x += 1
+    elif direction == Direction.south:
+        pos_y += 1
+    elif direction == Direction.west:
+        pos_x -= 1
+    elif direction == Direction.north:
+        pos_y -= 1
+        
+    print("Backtracking: posX: " + str(pos_x) + " posY: " + str(pos_y))
 
 def bsa():
     global direction
@@ -126,14 +151,7 @@ def bsa():
         elif (not robot_controller.is_blocked_front()) and (not check_forward_cell()):
             robot_controller.drive_forward(0.5)
             movement_history.append(0)
-            if direction == Direction.east:
-                pos_x += 1
-            elif direction == Direction.south:
-                pos_y += 1
-            elif direction == Direction.west:
-                pos_x -= 1
-            elif direction == Direction.north:
-                pos_y -= 1
+            update_pos(direction)
                 
         elif (not robot_controller.is_blocked_left()) and (not check_left_cell()):
             robot_controller.turn_left(90)
