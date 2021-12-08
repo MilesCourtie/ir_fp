@@ -145,7 +145,7 @@ class RobotController:
                 return True
         """
         mid = len(self.scan.ranges) // 2
-        width = len(self.scan.ranges) // 20
+        width = len(self.scan.ranges) // 18
         for i in range(mid - width,mid + width):
             if self.scan.ranges[i] < self.BLOCK_DETECTION_DISTANCE:
                 return True
