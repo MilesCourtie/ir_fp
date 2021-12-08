@@ -6,6 +6,7 @@ ROW_SEPARATION = 0.5
 
 robot = RobotController("zigzag")
 
+#Robot drives until it reaches a wall, turns around in a new row, and repeats
 def zigzag():
     while not robot.is_shutdown():
         done = True

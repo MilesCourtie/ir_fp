@@ -6,6 +6,7 @@ import random
 
 robot = RobotController("random_walk")
 
+#Rotate a random amount and then drive off until the robot hits a wall, and repeat
 def traverse():
     while not robot.is_shutdown():
         print("Driving")

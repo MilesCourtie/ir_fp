@@ -68,7 +68,7 @@ def check_forward_cell():
         print("visited")
     return grid[pos_x + int(fmod(direction.right().right().value, 2))][pos_y + int(fmod(direction.right().value,2))]
 
-
+#Backtrack the robot until a new unexplored cell is located
 def backtrack(stack):
 
     global direction
@@ -77,12 +77,13 @@ def backtrack(stack):
     direction = direction.right()
     direction = direction.right()
 
+    #Pop most recent motion off stack and reverse it
     while len(stack) != 0:
         last_movement = stack.pop()
         
         print("--------------------")
         print("BACKTRACKING")
-        print("set: currx:{},curry:{}".format(pos_x,pos_y))
+        print("Backtracking set: currx:{},curry:{}".format(pos_x,pos_y))
         print(direction)
         if last_movement == 0:
             robot_controller.drive_forward(0.5)
@@ -94,7 +95,7 @@ def backtrack(stack):
             robot_controller.turn_right(90)
             direction = direction.right()
             
-            
+        #Check around robot for any new unexplored cells    
         if (not robot_controller.is_blocked_right()) and  (not check_right_cell()):
             robot_controller.turn_right(90)
             direction=direction.right()
@@ -112,10 +113,10 @@ def backtrack(stack):
             update_pos(direction)
             bsa()
           
-    print("We're done for good")
+    print("Completed all spirals")
 
+#Update the variables denoting which cell robot is in
 def update_pos(direction):
-
     global pos_x, pos_y
 
     if direction == Direction.east:
@@ -126,8 +127,6 @@ def update_pos(direction):
         pos_x -= 1
     elif direction == Direction.north:
         pos_y -= 1
-        
-    print("Backtracking: posX: " + str(pos_x) + " posY: " + str(pos_y))
 
 def bsa():
     global direction
@@ -143,11 +142,13 @@ def bsa():
         print("set: currx:{},curry:{}".format(pos_x,pos_y))
         print(direction)
         print("blocked right?:{}".format(robot_controller.is_blocked_right()))
+        
         if (not robot_controller.is_blocked_right()) and  (not check_right_cell()):
             print('Turning right')
             robot_controller.turn_right(90)
             movement_history.append(1)
             direction = direction.right()
+            
         elif (not robot_controller.is_blocked_front()) and (not check_forward_cell()):
             robot_controller.drive_forward(0.5)
             movement_history.append(0)
@@ -157,9 +158,10 @@ def bsa():
             robot_controller.turn_left(90)
             movement_history.append(2)
             direction = direction.left()
+            
         else:
             #robot_controller.wait()
-            print("Stopped")
+            print("FInished a spiral")
             backtrack(movement_history)
 
 
