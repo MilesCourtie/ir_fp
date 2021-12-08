@@ -54,11 +54,7 @@ class RobotController:
         # forwards/backwards speed
         self.LINEAR_VEL = 1 # arbitrary units
 
-        # distance from the range sensor for an obstacle to register as 'blocking'
-        # the robot
-        self.BLOCK_DETECTION_DISTANCE = 0.85 # arbitrary units
-
-
+        
     def __update_pose(self, data):
         """
             Callback for when a new pose estimate is received.
@@ -125,14 +121,10 @@ class RobotController:
             Returns true iff the robot is obstructed on the right-hand side.
         """
         self.rate.sleep()
-        """"for i in range(166):
-            if self.scan.ranges[i] < self.IS_BLOCKED_READING:
+        DETECTION_DISTANCE = 1.1
+        for i in range(0, len(self.scan.ranges) // 10):
+            if self.scan.ranges[i] < DETECTION_DISTANCE:
                 return True
-        """
-        for i in range(int(0.1* len(self.scan.ranges))):
-            if self.scan.ranges[i] < self.BLOCK_DETECTION_DISTANCE + 0.25:
-                return True        
-        return False
 
 
     def is_blocked_front(self):
@@ -140,14 +132,11 @@ class RobotController:
             Returns true iff the robot is obstructed from in front.
         """
         self.rate.sleep()
-        """for i in range(166, 334):
-            if self.scan.ranges[i] < self.:
-                return True
-        """
         mid = len(self.scan.ranges) // 2
         width = len(self.scan.ranges) // 18
-        for i in range(mid - width,mid + width):
-            if self.scan.ranges[i] < self.BLOCK_DETECTION_DISTANCE:
+        DETECTION_DISTANCE = 0.85
+        for i in range(mid - width, mid + width):
+            if self.scan.ranges[i] < DETECTION_DISTANCE:
                 return True
         return False
 
@@ -157,13 +146,9 @@ class RobotController:
             Returns true iff the robot is obstructed on the left-hand side.
         """
         self.rate.sleep()
-        """
-        for i in range(334, len(self.scan.ranges)):
-            if self.scan.ranges[i] < self.IS_BLOCKED_READING:
-                return True
-        """
-        for i in range(-len(self.scan.ranges)//10,-1):
-            if self.scan.ranges[i] < self.BLOCK_DETECTION_DISTANCE + 0.25:
+        DETECTION_DISTANCE = 1.1
+        for i in range(-len(self.scan.ranges) // 10, -1):
+            if self.scan.ranges[i] < DETECTION_DISTANCE:
                 return True
         return False
 
@@ -256,14 +241,11 @@ class RobotController:
         vel_msg = Twist()
 
         while not self.is_blocked_front():
-            vel_msg.linear.x = 1
+            vel_msg.linear.x = self.LINEAR_VEL
             self.velocity_publisher.publish(vel_msg)
             self.rate.sleep()
 
-        vel_msg.linear.x = 0
-        vel_msg.linear.y = 0
-        vel_msg.linear.z = 0
-        self.velocity_publisher.publish(vel_msg)
+        self.__stop_robot()
 
 
     def go_to_pose(self, x, y, heading):
@@ -284,7 +266,7 @@ class RobotController:
         heading = math.radians(heading)
 
         # drive to desired position
-        while self.euclidean_distance(x, y) > self.DISTANCE_TOLERANCE:
+        while self.__euclidean_distance(x, y) > self.DISTANCE_TOLERANCE:
             steering_angle = self.__steering_angle(x, y)
 
             if abs(steering_angle - self.theta) > self.ROTATION_TOLERANCE:
