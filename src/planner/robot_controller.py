@@ -122,7 +122,7 @@ class RobotController:
         """
         self.rate.sleep()
         DETECTION_DISTANCE = 0.9
-        for i in range(10):
+        for i in range(0, len(self.scan.ranges) // 10):
             if self.scan.ranges[i] < DETECTION_DISTANCE:
                 return True
         return False
@@ -133,8 +133,10 @@ class RobotController:
             Returns true iff the robot is obstructed from in front.
         """
         self.rate.sleep()
+        mid = len(self.scan.ranges) // 2
+        width = len(self.scan.ranges) // 20
         DETECTION_DISTANCE = 0.7
-        for i in range(250, 260):
+        for i in range(mid - width, mid + width):
             if self.scan.ranges[i] < DETECTION_DISTANCE:
                 return True
         return False
@@ -146,7 +148,7 @@ class RobotController:
         """
         self.rate.sleep()
         DETECTION_DISTANCE = 0.9
-        for i in range(len(self.scan.ranges) - 11, len(self.scan.ranges) - 1):
+        for i in range(-len(self.scan.ranges) // 10, -1):
             if self.scan.ranges[i] < DETECTION_DISTANCE:
                 return True
         return False
@@ -239,8 +241,8 @@ class RobotController:
 
         vel_msg = Twist()
 
-        while not self.is_blocked_in_front():
-            vel_msg.linear.x = 1
+        while not self.is_blocked_front():
+            vel_msg.linear.x = self.LINEAR_VEL
             self.velocity_publisher.publish(vel_msg)
             self.rate.sleep()
 
