@@ -29,7 +29,6 @@ class Direction(enum.Enum):
             return Direction(value + 1)
 
 
-# Write any other attributes here
 robot_controller = RobotController("bsa")
 
 map_width = 21 
@@ -83,17 +82,22 @@ def backtrack(stack):
             robot_controller.turn_left(90)
         elif last_movement == 2:
             robot_controller.turn_right(90)
+            
+        if (check_right_cell == False):
+            robot_contoller.turn_right(90)
+            robot_controller.drive_forward(0.5)
+            bsa()
+        elif (check_forward_cell == False):
+            robot_controller.drive_forward(0.5)
+            bsa()
+        elif (check_left_cell == False):
+	    robot_contoller.turn_left(90)
+	    robot_controller.drive_forward(0.5)
+	    bsa()
+	    
+	if stack.empty() == True:
+	    print("We're done for good")
 
-        unvisited_cells = []
-        if (check_right_cell):
-            # add cell on right to unvisited
-            pass
-        elif (check_left_cell):
-            # add cell on left to unvisited
-            pass
-        elif (check_forward_cell):
-            # add forward cell to unvisited
-            pass
 
 
 def bsa():
