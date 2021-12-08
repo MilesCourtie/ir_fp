@@ -31,7 +31,7 @@ class RobotController:
         self.velocity_publisher = rospy.Publisher("/cmd_vel", Twist, queue_size=10)
 
         # subscriber for receiving pose estimates
-        rospy.Subscriber("/odom", Odometry, self.__update_pose)
+        rospy.Subscriber("/base_pose_ground_truth", Odometry, self.__update_pose)
 
         # subscriber for receiving laser scan data
         rospy.Subscriber("/base_scan", LaserScan, self.__update_scan)
@@ -48,13 +48,13 @@ class RobotController:
         self.rate = rospy.Rate(10) # Hz
 
         # tolerances for the robot's estimated pose being equal to a desired pose
-        self.DISTANCE_TOLERANCE = 0.1 # metres
+        self.DISTANCE_TOLERANCE = 0.001 # metres
         self.ROTATION_TOLERANCE = 0.001 # radians
 
         # forwards/backwards speed
         self.LINEAR_VEL = 1 # arbitrary units
 
-
+        
     def __update_pose(self, data):
         """
             Callback for when a new pose estimate is received.
@@ -121,11 +121,10 @@ class RobotController:
             Returns true iff the robot is obstructed on the right-hand side.
         """
         self.rate.sleep()
-        DETECTION_DISTANCE = 0.9
+        DETECTION_DISTANCE = 1.1
         for i in range(0, len(self.scan.ranges) // 10):
             if self.scan.ranges[i] < DETECTION_DISTANCE:
                 return True
-        return False
 
 
     def is_blocked_front(self):
@@ -134,8 +133,8 @@ class RobotController:
         """
         self.rate.sleep()
         mid = len(self.scan.ranges) // 2
-        width = len(self.scan.ranges) // 20
-        DETECTION_DISTANCE = 0.7
+        width = len(self.scan.ranges) // 18
+        DETECTION_DISTANCE = 0.85
         for i in range(mid - width, mid + width):
             if self.scan.ranges[i] < DETECTION_DISTANCE:
                 return True
@@ -147,7 +146,7 @@ class RobotController:
             Returns true iff the robot is obstructed on the left-hand side.
         """
         self.rate.sleep()
-        DETECTION_DISTANCE = 0.9
+        DETECTION_DISTANCE = 1.1
         for i in range(-len(self.scan.ranges) // 10, -1):
             if self.scan.ranges[i] < DETECTION_DISTANCE:
                 return True
