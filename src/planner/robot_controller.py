@@ -133,7 +133,7 @@ class RobotController:
         """
         self.rate.sleep()
         mid = len(self.scan.ranges) // 2
-        width = len(self.scan.ranges) // 18
+        width = len(self.scan.ranges) // 19
         DETECTION_DISTANCE = 0.85
         for i in range(mid - width, mid + width):
             if self.scan.ranges[i] < DETECTION_DISTANCE:
@@ -164,19 +164,23 @@ class RobotController:
         y = self.y
 
         vel_msg = Twist()
-
-        while distance > self.DISTANCE_TOLERANCE:
-
-            vel_msg.linear.x = self.LINEAR_VEL
+        last_distance = 0
+        while abs(distance) > self.DISTANCE_TOLERANCE:
+            
+            vel_msg.linear.x = self.LINEAR_VEL * max(0.01,min(abs(distance),1)) * (distance / abs(distance))
             self.velocity_publisher.publish(vel_msg)
             self.rate.sleep()
-
+            last_distance = distance
+            self.rate.sleep()
+            
             walked_distance = self.__euclidean_distance(x, y)
-            distance -= walked_distance
+            if distance <-self.DISTANCE_TOLERANCE:
+                distance += walked_distance
+            else:
+                distance -= walked_distance
 
             x = self.x
             y = self.y
-
 
         self.__stop_robot()
 
