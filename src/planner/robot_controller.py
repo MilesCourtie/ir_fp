@@ -42,7 +42,7 @@ class RobotController:
         # the most recent pose estimate
         self.x = 0
         self.y = 0
-        self.theta = 0
+        self.theta = 0 # degrees, [0,360)
 
         # desired rate at which to publish velocity commands
         self.rate = rospy.Rate(10) # Hz
@@ -66,6 +66,7 @@ class RobotController:
         (_, _, self.theta) = euler_from_quaternion(
                 [quaternion.x, quaternion.y, quaternion.z, quaternion.w]
                 )
+        self.theta = math.degrees(self.theta) % 360
 
 
     def __update_scan(self, data):
@@ -181,40 +182,32 @@ class RobotController:
         self.__stop_robot()
 
 
-    def __rotate(self, angle, direction):
+    def __rotate_to(self, target):
         """
-            Publishes velocity commands to rotate the robot in a given
-            direction until it has turned a given angle, then stops the
-            robot.
+            Publishes velocity commands to rotate the robot to a given heading.
 
             params:
-                angle : amount to turn in degrees
-                direction : "l" to turn left (clockwise) or "r" to turn right
+                target: heading to turn to in degrees
         """
         self.rate.sleep()
 
-        if angle == 0:
+        target = target % 360
+
+        if abs(target - self.theta) < self.ROTATION_TOLERANCE:
             return
 
-        if direction == "l":
-            rotation_direction = 1
-        elif direction == "r":
-            rotation_direction = -1
-
         vel_msg = Twist()
-
-        # calculate desired orientation in radians
-        angle = (rotation_direction * math.radians(angle)) + self.theta
-
-        # restrict desired orientation to be between -pi and pi
-        if abs(math.degrees(angle)) > 180:
-            angle = rotation_direction * math.radians(abs(math.degrees(angle)) - 360)
-
-        while abs(angle - self.theta) > self.ROTATION_TOLERANCE:
-            vel_msg.angular.z = abs(angle - self.theta) * rotation_direction
+        while True:
+            delta = target - self.theta
+            if delta >= 180:
+                delta = 360 - delta
+            delta = math.radians(delta)
+            if abs(delta) < self.ROTATION_TOLERANCE:
+                break;
+            vel_msg.angular.z = delta
             self.velocity_publisher.publish(vel_msg)
             self.rate.sleep()
-
+        
         self.__stop_robot()
 
 
@@ -222,14 +215,14 @@ class RobotController:
         """
             Turns the robot to the left by a given angle in degrees.
         """
-        self.__rotate(angle, "l")
+        self.__rotate_to((self.theta + angle) % 360)
 
 
     def turn_right(self, angle):
         """
             Turns the robot to the right by a given angle in degrees.
         """
-        self.__rotate(angle, "r")
+        self.__rotate_to((self.theta - angle) % 360)
 
 
     def drive_until_blocked(self):
@@ -248,6 +241,7 @@ class RobotController:
         self.__stop_robot()
 
 
+'''
     def go_to_pose(self, x, y, heading):
         """
             Drives the robot to a specified pose.
@@ -287,3 +281,4 @@ class RobotController:
             self.rate.sleep()
 
         self.__stop_robot()
+'''
