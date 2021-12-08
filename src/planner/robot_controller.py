@@ -48,7 +48,7 @@ class RobotController:
         self.rate = rospy.Rate(10) # Hz
 
         # tolerances for the robot's estimated pose being equal to a desired pose
-        self.DISTANCE_TOLERANCE = 0.001 # metres
+        self.DISTANCE_TOLERANCE = 0.005 # metres
         self.ROTATION_TOLERANCE = 0.001 # radians
 
         # forwards/backwards speed
