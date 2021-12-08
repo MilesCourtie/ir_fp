@@ -1,51 +1,38 @@
 #!/usr/bin/env python3
 
-from robot_controller import RobotController
-import rospy
-import random
+from robot_controller import RobotController, RobotInterruptException
 
+ROW_SEPARATION = 0.5
 
-class Zigzag:
-    def __init__(self, robot_width):
-        # use this object to control the robot
-        self.robot_controller = RobotController()
-        self.robot_width = robot_width
+robot = RobotController("zigzag")
 
-        # Write any other attributes here
+def zigzag():
+    while not robot.is_shutdown():
+        done = True
 
-    def traverse(self):
-        # Dont know what the width should be
-        while True:
-            done = True
-            # No clue what scale we are looking at
-            self.robot_controller.drive_until_blocked()
-            self.robot_controller.turn_right(90)
+        robot.drive_until_blocked()
+        robot.turn_left(90)
 
-            if not self.robot_controller.is_blocked_in_front():
-                done = False
-                self.robot_controller.drive_forward(self.robot_width)
+        if not robot.is_blocked_front():
+            done = False
+            robot.drive_forward(ROW_SEPARATION)
 
-            self.robot_controller.turn_right(90)
-            self.robot_controller.drive_until_blocked()
-            self.robot_controller.turn_left(90)
+        robot.turn_left(90)
+        robot.drive_until_blocked()
+        robot.turn_right(90)
 
-            if not self.robot_controller.is_blocked_in_front():
-                done = False
-                self.robot_controller.drive_forward(self.robot_width)
-                self.robot_controller.turn_left(90)
+        if not robot.is_blocked_front():
+            done = False
+            robot.drive_forward(ROW_SEPARATION)
+            robot.turn_right(90)
 
-            if done:
-                self.robot_controller.stop_robot()
-                break
+        if done:
+            break
 
 
 if __name__ == "__main__":
     try:
-        zigzag = Zigzag(0.35)
-
-        while not rospy.is_shutdown():
-            zigzag.traverse()
-
-        rospy.spin()
-    except rospy.ROSInterruptException:
+        zigzag()
+        robot.wait()
+    except RobotInterruptException:
         pass
