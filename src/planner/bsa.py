@@ -29,6 +29,7 @@ class Direction(enum.Enum):
             return Direction(value + 1)
 
 
+# Write any other attributes here
 robot_controller = RobotController("bsa")
 
 map_width = 21 
@@ -68,9 +69,24 @@ def check_forward_cell():
     return grid[pos_x + int(fmod(direction.right().right().value, 2))][pos_y + int(fmod(direction.right().value,2))]
 
 
-def backtrack(stack):
+def update_pos(direction):
 
-    # flip robot
+    global pos_x, pos_y
+
+    if direction == Direction.east:
+        pos_x += 1
+    elif direction == Direction.south:
+        pos_y += 1
+    elif direction == Direction.west:
+        pos_x -= 1
+    elif direction == Direction.north:
+        pos_y -= 1
+
+
+def backtrack(stack):
+    global direction
+
+    # flip robot    
     robot_controller.turn_right(180)
 
     while len(stack) != 0:
@@ -78,26 +94,22 @@ def backtrack(stack):
 
         if last_movement == 0:
             robot_controller.drive_forward(0.5)
+            update_pos(direction)
         elif last_movement == 1:
             robot_controller.turn_left(90)
+            direction = direction.left
         elif last_movement == 2:
             robot_controller.turn_right(90)
-            
-        if (check_right_cell == False):
-            robot_contoller.turn_right(90)
-            robot_controller.drive_forward(0.5)
-            bsa()
-        elif (check_forward_cell == False):
-            robot_controller.drive_forward(0.5)
-            bsa()
-        elif (check_left_cell == False):
-	    robot_contoller.turn_left(90)
-	    robot_controller.drive_forward(0.5)
-	    bsa()
-	    
-	if stack.empty() == True:
-	    print("We're done for good")
+            direction = direction.right
 
+        if (check_right_cell):
+            bsa()
+        elif (check_left_cell):
+            bsa()
+        elif (check_forward_cell):
+            bsa()
+
+    print("Finished")
 
 
 def bsa():
@@ -126,14 +138,7 @@ def bsa():
             
             movement_history.append(0)
             
-            if direction == Direction.east:
-                pos_x += 1
-            elif direction == Direction.south:
-                pos_y += 1
-            elif direction == Direction.west:
-                pos_x -= 1
-            elif direction == Direction.north:
-                pos_y -= 1
+            update_pos(direction)
 
         elif (not robot_controller.is_blocked_left()) and (not check_left_cell()):
             robot_controller.turn_left(90)
